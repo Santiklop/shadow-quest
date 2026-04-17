@@ -115,29 +115,68 @@
     '\u2605': 880.00,
   };
 
-  // Bright C major 4-bar loop (cheerful casual-puzzle vibe: I - vi - IV - V)
+  // Korobeiniki (the classic Tetris theme) — a traditional Russian folk
+  // song from the 1860s, public domain. E minor, 8 bars.
   const MELODY = [
-    // Bar 1 - C major
-    { f: 523.25, d: 0.5 }, { f: 659.25, d: 0.5 }, { f: 783.99, d: 1.0 },
-    { f: 659.25, d: 0.5 }, { f: 523.25, d: 0.5 }, { f: 659.25, d: 1.0 },
-    // Bar 2 - A minor
-    { f: 659.25, d: 0.5 }, { f: 523.25, d: 0.5 }, { f: 880.00, d: 1.0 },
-    { f: 783.99, d: 0.5 }, { f: 659.25, d: 0.5 }, { f: 523.25, d: 1.0 },
-    // Bar 3 - F major
-    { f: 523.25, d: 0.5 }, { f: 698.46, d: 0.5 }, { f: 880.00, d: 1.0 },
-    { f: 698.46, d: 0.5 }, { f: 523.25, d: 0.5 }, { f: 698.46, d: 1.0 },
-    // Bar 4 - G major -> resolve to C
-    { f: 587.33, d: 0.5 }, { f: 783.99, d: 0.5 }, { f: 987.77, d: 0.5 },
-    { f: 783.99, d: 0.5 }, { f: 587.33, d: 0.5 }, { f: 523.25, d: 1.5 },
-    { f: 0,      d: 1.0 },
+    // Bar 1
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 493.88, d: 0.5 }, // B4
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 493.88, d: 0.5 }, // B4
+    // Bar 2
+    { f: 440.00, d: 1.0 }, // A4
+    { f: 440.00, d: 0.5 }, // A4
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 587.33, d: 0.5 }, // D5
+    { f: 523.25, d: 0.5 }, // C5
+    // Bar 3
+    { f: 493.88, d: 1.5 }, // B4 (dotted quarter)
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 659.25, d: 1.0 }, // E5
+    // Bar 4
+    { f: 523.25, d: 1.0 }, // C5
+    { f: 440.00, d: 1.0 }, // A4
+    { f: 440.00, d: 1.5 }, // A4
+    { f: 0,      d: 0.5 }, // rest
+    // Bar 5
+    { f: 587.33, d: 1.5 }, // D5 (dotted)
+    { f: 698.46, d: 0.5 }, // F5
+    { f: 880.00, d: 1.0 }, // A5
+    { f: 783.99, d: 0.5 }, // G5
+    { f: 698.46, d: 0.5 }, // F5
+    // Bar 6
+    { f: 659.25, d: 1.5 }, // E5 (dotted)
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 587.33, d: 0.5 }, // D5
+    { f: 523.25, d: 0.5 }, // C5
+    // Bar 7
+    { f: 493.88, d: 1.0 }, // B4
+    { f: 493.88, d: 0.5 }, // B4
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 659.25, d: 1.0 }, // E5
+    // Bar 8
+    { f: 523.25, d: 1.0 }, // C5
+    { f: 440.00, d: 1.0 }, // A4
+    { f: 440.00, d: 1.5 }, // A4
+    { f: 0,      d: 0.5 }, // rest
   ];
 
-  // Bass notes triggered at each chord change (beat positions 0, 4, 8, 12)
+  // Bass on each bar (E minor progression: Em Em B7 B7 C G Am B7)
   const BASS_LINE = [
-    { f: 130.81, t: 0  }, // C3
-    { f: 110.00, t: 4  }, // A2
-    { f: 87.307, t: 8  }, // F2
-    { f: 98.000, t: 12 }, // G2
+    { f: 82.41,  t: 0  }, // E2   - Em
+    { f: 82.41,  t: 4  }, // E2   - Em
+    { f: 123.47, t: 8  }, // B2   - B7
+    { f: 123.47, t: 12 }, // B2   - B7
+    { f: 130.81, t: 16 }, // C3   - C
+    { f: 98.00,  t: 20 }, // G2   - G
+    { f: 110.00, t: 24 }, // A2   - Am
+    { f: 123.47, t: 28 }, // B2   - B7
   ];
 
   const audio = {
@@ -168,8 +207,8 @@
     },
 
     startMusic() {
-      // Light, bright C major pad (tonic + fifth, gentle shimmer)
-      [130.81, 196.00].forEach((freq, i) => {
+      // Light E minor pad (root + fifth), subtle under the melody
+      [164.81, 246.94].forEach((freq, i) => {
         const osc = this.ctx.createOscillator();
         osc.type = 'sine';
         osc.frequency.value = freq;
@@ -177,7 +216,7 @@
         filter.type = 'lowpass';
         filter.frequency.value = 900;
         const g = this.ctx.createGain();
-        g.gain.value = i === 0 ? 0.055 : 0.04;
+        g.gain.value = i === 0 ? 0.035 : 0.025;
         osc.connect(filter);
         filter.connect(g);
         g.connect(this.musicGain);
@@ -196,7 +235,7 @@
 
     playMelody() {
       if (!this.ctx) return;
-      const BEAT = 0.45;
+      const BEAT = 0.38;
       let delayMs = 0;
 
       // Walking bass on chord changes
@@ -323,7 +362,7 @@
       [base, base * 1.5, base * 1.25, base].forEach((f, i) => setTimeout(() => this.beep(f, 0.5, 'triangle', 0.06), i * 110));
     },
     portal()     { this.sweep(200, 1400, 0.7, 'sine', 0.15); },
-    levelStart() { [130.81, 164.81, 196.00, 261.63, 329.63].forEach((f, i) => setTimeout(() => this.piano(f, 1.1, 0.15), i * 130)); },
+    levelStart() { [164.81, 196.00, 246.94, 329.63, 392.00].forEach((f, i) => setTimeout(() => this.piano(f, 1.1, 0.15), i * 120)); },
     bossEntrance() {
       // deep ominous drop
       this.sweep(220, 40, 1.4, 'sawtooth', 0.28);
