@@ -20,6 +20,7 @@
       exitPos: { x: 480, y: 580 },
       playerSpawn: { x: 480, y: 330 },
       snakeSpeed: 1.5,
+      snake: true,
       bear: false,
     },
     2: {
@@ -36,7 +37,8 @@
       exitPos: { x: 480, y: 610 },
       playerSpawn: { x: 480, y: 300 },
       snakeSpeed: 1.5,
-      bear: false,
+      snake: false,
+      bear: true,
     },
     3: {
       title: 'Level 3 \u2014 The Abyssal Vault',
@@ -55,6 +57,7 @@
       bossPortal: { x: 480, y: 410 },
       playerSpawn: { x: 480, y: 230 },
       snakeSpeed: 1.9,
+      snake: true,
       bear: true,
     },
   };
@@ -85,6 +88,8 @@
     biteFlash: 0,
     bossPhase: 1,
     bossDefeated: false,
+    fireworks: [],
+    nextFireworkT: 0,
   };
 
   const player = { x: 480, y: 330, speed: 3.2 };
@@ -105,15 +110,21 @@
   // AUDIO
   // ==========================================================
   const SEQ_SYMBOLS_ALL = ['\u2726', '\u26A1', '\u2744', '\u263E', '\u2600', '\u2605'];
-  // Piano notes (A minor pentatonic): A4 C5 D5 E5 G5 A5
-  const SEQ_NOTES = {
-    '\u2726': 440.00,
-    '\u26A1': 523.25,
-    '\u2744': 587.33,
-    '\u263E': 659.25,
-    '\u2600': 783.99,
-    '\u2605': 880.00,
-  };
+
+  // Positional guitar chords — each rune position gets a chord so the
+  // sequence sounds like Korobeiniki bar 1: top notes trace E5-B4-C5-D5-C5-B4.
+  // Voicings chosen so the melody-note sits on top of each chord.
+  const CHORD_PROGRESSION = [
+    [440.00, 523.25, 659.25], // Am     (A-C-E)   top E5
+    [329.63, 392.00, 493.88], // Em     (E-G-B)   top B4
+    [329.63, 392.00, 523.25], // C/E    (E-G-C)   top C5
+    [392.00, 493.88, 587.33], // G      (G-B-D)   top D5
+    [329.63, 392.00, 523.25], // C/E    (E-G-C)   top C5
+    [329.63, 392.00, 493.88], // Em     (E-G-B)   top B4
+  ];
+
+  // Dissonant cluster used when the player clicks the wrong symbol
+  const WRONG_CHORD = [440.00, 466.16, 493.88]; // A-A#-B chromatic cluster
 
   // Korobeiniki (the classic Tetris theme) — a traditional Russian folk
   // song from the 1860s, public domain. E minor, 8 bars.
@@ -165,9 +176,54 @@
     { f: 440.00, d: 1.0 }, // A4
     { f: 440.00, d: 1.5 }, // A4
     { f: 0,      d: 0.5 }, // rest
+
+    // --- Part B: bars 9-16, variation that climbs and descends ---
+    // Bar 9 - descending run
+    { f: 659.25, d: 0.5 }, // E5
+    { f: 587.33, d: 0.5 }, // D5
+    { f: 523.25, d: 0.5 }, // C5
+    { f: 493.88, d: 0.5 }, // B4
+    { f: 440.00, d: 0.5 }, // A4
+    { f: 392.00, d: 0.5 }, // G4
+    { f: 440.00, d: 0.5 }, // A4
+    { f: 493.88, d: 0.5 }, // B4
+    // Bar 10
+    { f: 523.25, d: 1.0 }, // C5
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 880.00, d: 1.0 }, // A5
+    { f: 783.99, d: 0.5 }, // G5
+    { f: 739.99, d: 0.5 }, // F#5
+    // Bar 11
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 523.25, d: 1.0 }, // C5
+    { f: 493.88, d: 1.0 }, // B4
+    // Bar 12
+    { f: 440.00, d: 1.0 }, // A4
+    { f: 493.88, d: 1.0 }, // B4
+    { f: 523.25, d: 2.0 }, // C5
+    // Bar 13 - ascending
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 659.25, d: 1.0 }, // E5
+    { f: 739.99, d: 1.0 }, // F#5
+    { f: 783.99, d: 1.0 }, // G5
+    // Bar 14 - peak
+    { f: 880.00, d: 1.5 }, // A5
+    { f: 783.99, d: 0.5 }, // G5
+    { f: 739.99, d: 1.0 }, // F#5
+    { f: 659.25, d: 1.0 }, // E5
+    // Bar 15 - descending
+    { f: 587.33, d: 1.0 }, // D5
+    { f: 523.25, d: 1.0 }, // C5
+    { f: 493.88, d: 1.0 }, // B4
+    { f: 440.00, d: 1.0 }, // A4
+    // Bar 16 - dominant, resolves back to Em at loop start
+    { f: 392.00, d: 1.0 }, // G4
+    { f: 440.00, d: 1.0 }, // A4
+    { f: 493.88, d: 2.0 }, // B4
   ];
 
-  // Bass on each bar (E minor progression: Em Em B7 B7 C G Am B7)
+  // Bass on each bar (16 bars: Part A | Part B)
   const BASS_LINE = [
     { f: 82.41,  t: 0  }, // E2   - Em
     { f: 82.41,  t: 4  }, // E2   - Em
@@ -177,6 +233,14 @@
     { f: 98.00,  t: 20 }, // G2   - G
     { f: 110.00, t: 24 }, // A2   - Am
     { f: 123.47, t: 28 }, // B2   - B7
+    { f: 82.41,  t: 32 }, // E2   - Em
+    { f: 110.00, t: 36 }, // A2   - Am
+    { f: 98.00,  t: 40 }, // G2   - G
+    { f: 110.00, t: 44 }, // A2   - Am
+    { f: 98.00,  t: 48 }, // G2   - G
+    { f: 110.00, t: 52 }, // A2   - Am
+    { f: 82.41,  t: 56 }, // E2   - Em
+    { f: 123.47, t: 60 }, // B2   - B7 leading back to Em
   ];
 
   const audio = {
@@ -315,7 +379,58 @@
       osc2.stop(now + dur + 0.1);
     },
 
-    pianoNote(freq) { this.piano(freq, 1.0, 0.18); },
+    // Strummed sawtooth-based guitar chord — distinct from the piano melody.
+    guitarChord(freqs, vol) {
+      if (!this.ctx || !freqs || freqs.length === 0) return;
+      const now = this.ctx.currentTime;
+      const v = vol != null ? vol : 0.06;
+      freqs.forEach((f, i) => {
+        const start = now + i * 0.018;
+        // Body: sawtooth with filter sweep for plucked feel
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = f;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 1.6;
+        filter.frequency.setValueAtTime(3000, start);
+        filter.frequency.exponentialRampToValueAtTime(900, start + 1.0);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0, start);
+        g.gain.linearRampToValueAtTime(v, start + 0.005);
+        g.gain.exponentialRampToValueAtTime(v * 0.25, start + 0.25);
+        g.gain.exponentialRampToValueAtTime(0.001, start + 1.4);
+        osc.connect(filter);
+        filter.connect(g);
+        g.connect(this.master);
+        osc.start(start);
+        osc.stop(start + 1.5);
+        // Harmonic: triangle an octave up for string brightness
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.value = f * 2;
+        const g2 = this.ctx.createGain();
+        g2.gain.setValueAtTime(0, start);
+        g2.gain.linearRampToValueAtTime(v * 0.28, start + 0.005);
+        g2.gain.exponentialRampToValueAtTime(0.001, start + 0.55);
+        osc2.connect(g2);
+        g2.connect(this.master);
+        osc2.start(start);
+        osc2.stop(start + 0.6);
+      });
+    },
+
+    positionChord(i) {
+      this.guitarChord(CHORD_PROGRESSION[i % CHORD_PROGRESSION.length]);
+    },
+    wrongChord() {
+      this.guitarChord(WRONG_CHORD, 0.055);
+    },
+    setMusicVolume(v) {
+      if (this.ctx && this.musicGain) {
+        this.musicGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.12);
+      }
+    },
 
     beep(freq, dur, type, vol) {
       if (!this.ctx) return;
@@ -362,6 +477,12 @@
       [base, base * 1.5, base * 1.25, base].forEach((f, i) => setTimeout(() => this.beep(f, 0.5, 'triangle', 0.06), i * 110));
     },
     portal()     { this.sweep(200, 1400, 0.7, 'sine', 0.15); },
+    sparkle()    {
+      if (Math.random() > 0.4) return;
+      const f = 1400 + Math.random() * 800;
+      this.beep(f, 0.1, 'triangle', 0.04);
+      setTimeout(() => this.beep(f * 1.33, 0.08, 'triangle', 0.03), 55);
+    },
     levelStart() { [164.81, 196.00, 246.94, 329.63, 392.00].forEach((f, i) => setTimeout(() => this.piano(f, 1.1, 0.15), i * 120)); },
     bossEntrance() {
       // deep ominous drop
@@ -526,7 +647,7 @@
     const maxLen = sn.length * 14;
     while (sn.segments.length > maxLen) sn.segments.shift();
 
-    if (state.biteCooldown > 0) { state.biteCooldown--; return; }
+    if (state.biteCooldown > 0) return;
 
     // Head collision
     if (dist(sn, player) < 26) { snakeBite(); return; }
@@ -652,7 +773,8 @@
     } else {
       notify('\u{1F43B} Swatted by the bear!', 'bear');
     }
-    state.bear.size = Math.min(2.3, state.bear.size * 1.13);
+    state.bear.size = Math.min(5.5, state.bear.size * 1.39);
+    setTimeout(() => notify('\u{1F43B} The bear grows fatter!', 'bear'), 400);
     relocateEnemy(state.bear, 300);
     state.bear.dir = Math.random() * Math.PI * 2;
     state.biteCooldown = 90;
@@ -736,6 +858,79 @@
     drawPets();
     drawPlayer();
     drawBiteFlash();
+    drawFireworks();
+    drawSignature();
+  }
+
+  function drawSignature() {
+    ctx.save();
+    ctx.font = '10px Consolas, monospace';
+    ctx.fillStyle = 'rgba(169, 212, 255, 0.45)';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.shadowColor = 'rgba(62, 168, 255, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText('Created by Anna D (and her dad)', W - 12, H - 8);
+    ctx.restore();
+  }
+
+  // ---------- Fireworks near signature ----------
+  const SIGNATURE_CENTER = { x: W - 90, y: H - 14 };
+
+  function updateFireworks() {
+    const nearSig = !state.modalOpen && dist(player, SIGNATURE_CENTER) < 170;
+    if (nearSig && state.t >= state.nextFireworkT) {
+      const bx = SIGNATURE_CENTER.x + (Math.random() - 0.5) * 110;
+      const by = SIGNATURE_CENTER.y - 4 + (Math.random() - 0.5) * 10;
+      spawnFireworkBurst(bx, by);
+      state.nextFireworkT = state.t + 22 + Math.floor(Math.random() * 24);
+    }
+    for (let i = state.fireworks.length - 1; i >= 0; i--) {
+      const p = state.fireworks[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+      p.life--;
+      if (p.life <= 0) state.fireworks.splice(i, 1);
+    }
+  }
+
+  function spawnFireworkBurst(x, y) {
+    const palette = ['#ffd86b', '#66ffcc', '#ff6680', '#3ea8ff', '#c28cff', '#ffffff'];
+    const color = palette[Math.floor(Math.random() * palette.length)];
+    const count = 10 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1 + Math.random() * 2.4;
+      state.fireworks.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 0.9,
+        life: 35 + Math.floor(Math.random() * 22),
+        maxLife: 58,
+        color,
+        size: 1.4 + Math.random() * 1.4,
+      });
+    }
+    audio.sparkle();
+  }
+
+  function drawFireworks() {
+    if (state.fireworks.length === 0) return;
+    ctx.save();
+    for (const p of state.fireworks) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawGrid() {
@@ -993,6 +1188,7 @@
   function closeModal() {
     state.modalOpen = false;
     overlay.classList.add('hidden');
+    audio.setMusicVolume(0.22); // restore BGM if it was ducked
   }
   document.querySelectorAll('.close-btn').forEach(btn => btn.addEventListener('click', () => { audio.click(); closeModal(); }));
 
@@ -1028,6 +1224,7 @@
     seqSymbols = SEQ_SYMBOLS_ALL.slice(0, count);
     seqAnswer = shuffle(seqSymbols.slice());
     seqInput = [];
+    audio.setMusicVolume(0.04); // duck BGM so chords are clearly audible
     const display = document.getElementById('seq-display');
     const btns = document.getElementById('seq-buttons');
     const status = document.getElementById('seq-status');
@@ -1049,7 +1246,7 @@
       if (i < slots.length) {
         slots[i].classList.add('active');
         slots[i].textContent = seqAnswer[i];
-        audio.pianoNote(SEQ_NOTES[seqAnswer[i]]);
+        audio.positionChord(i);
         i++;
       } else {
         clearInterval(reveal);
@@ -1065,7 +1262,7 @@
     seqSymbols.forEach(sym => {
       const b = document.createElement('button');
       b.textContent = sym;
-      b.addEventListener('click', () => { audio.pianoNote(SEQ_NOTES[sym]); handleSeqClick(sym, slots, status); });
+      b.addEventListener('click', () => handleSeqClick(sym, slots, status));
       btns.appendChild(b);
     });
   }
@@ -1077,11 +1274,13 @@
     slots[idx].textContent = sym;
     slots[idx].classList.add('active');
     if (sym !== seqAnswer[idx]) {
+      audio.wrongChord();
       status.textContent = '\u2717 Wrong order. Retrying...';
       status.className = 'status err';
       setTimeout(() => startSequence(), 1200);
       return;
     }
+    audio.positionChord(idx);
     if (seqInput.length === seqAnswer.length) {
       status.textContent = '\u2713 [ Puzzle Cleared ]';
       status.className = 'status ok';
@@ -1513,6 +1712,7 @@
     bossEchoExpected = bossEchoSequence.slice().reverse();
     bossEchoInput = [];
     bossEchoRevealing = true;
+    audio.setMusicVolume(0.04);
     const display = document.getElementById('boss-echo-display');
     const btns = document.getElementById('boss-echo-buttons');
     const status = document.getElementById('boss-echo-status');
@@ -1533,7 +1733,7 @@
       if (i < bossEchoSequence.length) {
         slots[i].classList.add('active');
         slots[i].textContent = bossEchoSequence[i];
-        audio.pianoNote(SEQ_NOTES[bossEchoSequence[i]]);
+        audio.positionChord(i);
         i++;
       } else {
         clearInterval(reveal);
@@ -1552,7 +1752,6 @@
       b.textContent = sym;
       b.addEventListener('click', () => {
         if (bossEchoRevealing) return;
-        audio.pianoNote(SEQ_NOTES[sym]);
         handleBossEchoClick(sym);
       });
       btns.appendChild(b);
@@ -1567,12 +1766,14 @@
     slots[idx].textContent = sym;
     slots[idx].classList.add('active');
     if (sym !== bossEchoExpected[idx]) {
+      audio.wrongChord();
       const s = document.getElementById('boss-echo-status');
       s.textContent = '\u2717 The shadow rejects your echo. Restarting...';
       s.className = 'status err';
       setTimeout(() => startBossEcho(), 1400);
       return;
     }
+    audio.positionChord(idx);
     if (bossEchoInput.length === bossEchoExpected.length) {
       const s = document.getElementById('boss-echo-status');
       s.textContent = '\u2713 [ The first shard shatters ]';
@@ -1797,7 +1998,8 @@
       pi.x = player.x - 40 * (i + 1);
       pi.y = player.y;
     });
-    spawnSnake();
+    if (L.snake) spawnSnake();
+    else state.snake = null;
     if (L.bear) spawnBear();
     else state.bear = null;
     updateCoinUI();
@@ -1858,9 +2060,11 @@
   // ==========================================================
   function loop() {
     state.t++;
+    if (state.biteCooldown > 0) state.biteCooldown--;
     updatePlayer();
     updateSnake();
     updateBear();
+    updateFireworks();
     updateProximity();
     drawWorld();
     requestAnimationFrame(loop);
@@ -1874,7 +2078,8 @@
   updateCoinUI();
   updateTitleUI();
   updateMuteButton();
-  spawnSnake();
+  if (LEVELS[1].snake) spawnSnake();
+  if (LEVELS[1].bear) spawnBear();
   notify('\u2694\uFE0F  ' + LEVELS[1].title);
   setTimeout(() => notify('Find 3 runes, then visit the altar.'), 700);
   setTimeout(() => notify('\u26A0 Beware the serpent \u2014 head AND tail bite.', 'danger'), 1500);
